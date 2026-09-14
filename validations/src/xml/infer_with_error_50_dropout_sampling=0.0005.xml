@@ -1,0 +1,352 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<beast beautitemplate='MultiTypeBirthDeath' beautistatus=''
+       namespace="lineageTree.substitutionmodel.ScarringLoss:beast.pkgmgmt:beast.base.core:beast.base.inference:beast.base.evolution.alignment:beast.base.evolution.tree.coalescent:beast.base.util:beast.base.math:beast.evolution.nuc:beast.base.evolution.operator:beast.base.inference.operator:beast.base.evolution.sitemodel:beast.base.evolution.substitutionmodel:beast.base.evolution.likelihood"
+       required="" version="2.6">
+
+
+    <plate var="n" range="1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20">
+        <data id="alignment_$(n)" spec="feast.fileio.AlignmentFromNexus" name="alignment"
+              fileName="./data/subsampled_simulated_$(analysis)_$(ntargets).seed=$(seed).alignment.targetBC=$(n).sciphy">
+            <userDataType spec="beast.base.evolution.datatype.IntegerData"/>
+        </data>
+
+    </plate>
+
+
+    <map name="Uniform">beast.base.inference.distribution.Uniform</map>
+    <map name="Exponential">beast.base.inference.distribution.Exponential</map>
+    <map name="LogNormal">beast.base.inference.distribution.LogNormalDistributionModel</map>
+    <map name="Normal">beast.base.inference.distribution.Normal</map>
+    <map name="Beta">beast.base.inference.distribution.Beta</map>
+    <map name="Gamma">beast.base.inference.distribution.Gamma</map>
+    <map name="LaplaceDistribution">beast.base.inference.distribution.LaplaceDistribution</map>
+    <map name="prior">beast.base.inference.distribution.Prior</map>
+    <map name="InverseGamma">beast.base.inference.distribution.InverseGamma</map>
+    <map name="OneOnX">beast.base.inference.distribution.OneOnX</map>
+
+    <taxa id="TaxonSet.0" spec="TaxonSet">
+        <alignment idref="alignment_1"/>
+    </taxa>
+
+    <!-- set all tip dates, time points of sampling to 25 time units -->
+    <traitSet id="dateTrait.t:alignment"
+              spec="beast.base.evolution.tree.TraitSet"
+              taxa="@TaxonSet.0"
+              traitname="date-forward"
+              value="$(first_CellID)=25"
+    />
+
+
+    <!-- run MCMC with 5x10^9 steps -->
+    <run id="mcmc" spec="MCMC" chainLength="200000000">
+        <state id="state" spec="State" storeEvery="5000">
+
+            <!-- build starting tree -->
+            <stateNode id="SciPhyTree"  spec="sciphy.evolution.tree.startingTree" rootHeight="24.999"
+                       taxa="@alignment_4" scarringHeight="24.999"
+                       scarringDuration="$(scarring_duration)" sequencesAreClustered="false">
+                <trait idref="dateTrait.t:alignment"/>
+                <taxonset idref="TaxonSet.0"/>
+            </stateNode>
+
+
+            <!-- editing model parameters -->
+            <parameter id="insertRates"
+                       spec="parameter.RealParameter"
+                       lower="0.0"
+                       upper="1.0"
+                       name="stateNode"
+                       >
+                0.1 0.1 0.1 0.1 0.1
+                0.1 0.1 0.1 0.1 0.025
+                0.025 0.025 0.025
+            </parameter>
+
+            <parameter id="clockRate"
+                       spec="parameter.RealParameter"
+                       dimension="1"
+                       lower="0.0"
+                       upper="Infinity"
+                       name="stateNode"
+                       >0.3
+            </parameter>
+
+            <parameter id="missRate"
+                       spec="parameter.RealParameter"
+                       dimension="1"
+                       lower="0.0"
+                       upper="Infinity"
+                       name="stateNode"
+            >0.0
+            </parameter>
+
+            <parameter id="missProb"
+                       spec="parameter.RealParameter"
+                       dimension="1"
+                       lower="0.0"
+                       upper="1.0"
+                       name="stateNode"
+            >0.1
+            </parameter>
+
+            <!-- population process parameters -->
+            <parameter id="birthRate"
+                       spec="parameter.RealParameter"
+                       dimension="1"
+                       lower="0.0"
+                       upper="Infinity"
+                       name="stateNode"
+                       >0.11
+            </parameter>
+
+            <parameter id="deathRate"
+                       spec="parameter.RealParameter"
+                       dimension="1"
+                       lower="0.0"
+                       upper="Infinity"
+                       name="stateNode"
+                       >0.1
+            </parameter>
+
+            <!-- The sampling rate through time is set to 0 as we only
+                 sample at the end of the experiment with sampling
+                 proportion rho -->
+            <parameter id="samplingRate"
+                       spec="parameter.RealParameter"
+                       dimension="1"
+                       lower="0.0"
+                       name="stateNode"
+                       upper="1.0">0.0
+            </parameter>
+
+            <!--fix origin to experiment duration, 25 -->
+            <parameter id="origin"
+                       spec="parameter.RealParameter"
+                       name="stateNode">25
+            </parameter>
+
+            <!-- fix sampling proportion to truth -->
+            <parameter id="samplingProportion"
+                       spec="parameter.RealParameter"
+                       lower="0.0"
+                       upper="1.0"
+                       name="stateNode"
+                       >$(sampling_Proportion)
+            </parameter>
+
+            <parameter id="freqParameter.s:alignment"
+                       spec="parameter.RealParameter"
+                       dimension="4"
+                       lower="0.0"
+                       upper="1.0"
+                       name="stateNode"
+                       >0.25
+            </parameter>
+
+        </state>
+
+
+        <!-- define posterior -->
+        <distribution id="posterior" spec="beast.base.inference.CompoundDistribution">
+
+            <!--  priors  -->
+            <distribution id="prior" spec="beast.base.inference.CompoundDistribution">
+
+                <distribution id="birthDeathMigration.t:alignment" spec="bdsky.evolution.speciation.BirthDeathSkylineModel"
+                              birthRate="@birthRate" deathRate="@deathRate" samplingRate="@samplingRate"
+                              contemp="true" origin="@origin" rho="@samplingProportion"
+                              tree="@SciPhyTree" conditionOnSurvival="true">
+                </distribution>
+
+                <prior id="insertRatesPrior" name="distribution" x="@insertRates">
+                    <Dirichlet name="distr" spec="beast.base.inference.distribution.Dirichlet">
+                        <parameter spec="parameter.RealParameter"
+                                   estimate="false"
+                                   name="alpha">
+                            1.5 1.5 1.5 1.5 1.5
+                            1.5 1.5 1.5 1.5 1.5
+                            1.5 1.5 1.5
+                        </parameter>
+                    </Dirichlet>
+                </prior>
+
+
+                <!-- Prior for the clock rate -->
+                <prior id="ClockPrior.c:alignment" name="distribution" x="@clockRate">
+                    <LogNormal name="distr" M="-2" S="0.5"/>
+                </prior>
+
+                <!-- Prior for the silencing rate -->
+<!--                <prior id="MissRatePrior.c:alignment" name="distribution" x="@missRate">-->
+<!--                    <LogNormal name="distr" M="-4.464775" S="0.5"/>-->
+<!--                </prior>-->
+
+                <!-- Prior for the missing data prob at tips -->
+                <prior id="MissProbPrior.c:alignment" name="distribution" x="@missProb">
+                <Beta name="distr" alpha="3.33333333333" beta="6.6666666666"/>
+                </prior>
+                <!-- Prior for the division rate -->
+                <prior id="birthPrior" name="distribution" x="@birthRate">
+                    <LogNormal name="distr" M="-0.2231436" S="1.0"/>
+                </prior>
+
+                <!-- Prior for the death rate -->
+                <prior id="deathPrior" name="distribution" x="@deathRate">
+                    <LogNormal name="distr" M="-1.609438" S="1.0"/>
+                </prior>
+
+            </distribution>
+
+
+            <!-- SciPhy tree likelihood -->
+            <distribution id="likelihood" spec="beast.base.inference.CompoundDistribution" useThreads="false">
+                <!-- Compound of all target likelihoods -->
+                <plate var="n" range="1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20">
+                    <distribution id="treeLikelihood_$(n)"
+                                  spec="sciphy.evolution.likelihood.SciPhyTreeLikelihood"
+                                  data="@alignment_$(n)"
+                                  tree="@SciPhyTree"
+                                  useScaling="true"
+                                  arrayLength="5"
+                                  origin="@origin">
+
+                        <siteModel spec="SiteModel">
+                            <mutationRate spec="parameter.RealParameter"
+                                          value="1.0"
+                                          estimate="false"/>
+                            <parameter
+                                    spec="parameter.RealParameter"
+                                    estimate="false"
+                                    lower="0.0"
+                                    upper="1.0"
+                                    name="proportionInvariant"
+                            >0.0
+                            </parameter>
+
+                            <substModel
+                                    spec="sciphy.evolution.substitutionmodel.SciPhySubstitutionModel"
+                                    editProbabilities="@insertRates" missingRate="@missRate" missingProbability="@missProb">
+                                <frequencies
+                                        spec="beast.base.evolution.substitutionmodel.Frequencies"
+                                        frequencies="1.0 0 0 0 0 0 0 0 0 0 0 0 0 0"
+                                        estimate="false"/>
+                            </substModel>
+                        </siteModel>
+                        <branchRateModel spec="beast.base.evolution.branchratemodel.StrictClockModel"
+                                         clock.rate="@clockRate"/>
+                    </distribution>
+                </plate>
+
+            </distribution>
+
+        </distribution>
+
+        <!-- operator schedule -->
+        <operatorschedule spec="beast.base.evolution.operator.kernel.BactrianOperatorSchedule"/>
+
+        <!-- tree operators -->
+        <operator spec="ScaleOperator" tree="@SciPhyTree" weight="0.8"/>
+        <operator spec="WilsonBalding" tree="@SciPhyTree" weight="10.0"/>
+        <operator spec="Uniform" tree="@SciPhyTree"
+                  weight="10.0"/>
+
+        <operator spec="Exchange"
+                  isNarrow="true" tree="@SciPhyTree"
+                  weight="10.0"/>
+        <operator spec="SubtreeSlide" tree="@SciPhyTree" weight="10.0"/>
+
+        <operator id="updown_treeClock" spec="UpDownOperator" scaleFactor="0.8" weight="1.5">
+            <up idref="clockRate"/>
+            <down idref="SciPhyTree"/>
+        </operator>
+
+        <!-- phylogenetic operators -->
+        <operator id="insertProbabilitiesOperator"
+                  spec="DeltaExchangeOperator"
+                  parameter="@insertRates"
+                  weight="50.0"
+                  delta="0.03"/>
+
+        <operator id="clockRateScaler"
+                  spec="kernel.BactrianScaleOperator"
+                  parameter="@clockRate"
+                  scaleFactor="0.75"
+                  weight="10.0"/>
+
+<!--        <operator id="missRateScaler"-->
+<!--                  spec="kernel.BactrianScaleOperator"-->
+<!--                  parameter="@missRate"-->
+<!--                  scaleFactor="0.75"-->
+<!--                  weight="3.0"/>-->
+
+        <operator id="missProbScaler"
+                  spec="kernel.BactrianScaleOperator"
+                  parameter="@missProb"
+                  scaleFactor="0.75"
+                  weight="3.0"/>
+
+        <!-- b-d operators -->
+        <operator id="BirthRateScaler" spec="kernel.BactrianScaleOperator" parameter="@birthRate" upper="10.0" weight="4.0"/>
+        <operator id="DeathRateScaler" spec="kernel.BactrianScaleOperator" parameter="@deathRate" upper="10.0" weight="4.0"/>
+
+        <operator id="updownBD" spec="kernel.BactrianUpDownOperator" scaleFactor="0.8" weight="4.0">
+            <up idref="birthRate"/>
+            <down idref="deathRate"/>
+        </operator>
+
+        <operator id="upupBD" spec="kernel.BactrianUpDownOperator" scaleFactor="0.8" weight="4.0">
+            <up idref="birthRate"/>
+            <up idref="deathRate"/>
+        </operator>
+
+        <operator id="BirthRateScalerNormal" spec="ScaleOperator" parameter="@birthRate" upper="10.0" weight="4.0"/>
+        <operator id="DeathRateScalerNormal" spec="ScaleOperator" parameter="@deathRate" upper="10.0" weight="4.0"/>
+
+        <operator id="updownBDNormal" spec="beast.base.inference.operator.UpDownOperator" scaleFactor="0.8" weight="4.0">
+            <up idref="birthRate"/>
+            <down idref="deathRate"/>
+        </operator>
+
+        <operator id="upupBDNormal" spec="beast.base.inference.operator.UpDownOperator" scaleFactor="0.8" weight="4.0">
+            <up idref="birthRate"/>
+            <up idref="deathRate"/>
+        </operator>
+
+
+        <!-- Loggers -->
+        <logger id="tracelog" spec="Logger"
+                fileName="log/infer_subsampled_simulated_$(analysis)_$(ntargets).seed=$(seed).log"
+                logEvery="1000">
+            <log idref="posterior"/>
+            <log idref="likelihood"/>
+            <log idref="prior"/>
+            <plate var="n" range="1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20">
+                <log idref="treeLikelihood_$(n)"/>
+            </plate>
+            <log id="treeHeight.t:alignment" spec="beast.base.evolution.tree.TreeHeightLogger" tree="@SciPhyTree"/>
+            <log id="treeLength.t:alignment" spec="multitypetree.util.TreeLengthLogger" tree="@SciPhyTree"/>
+            <log idref="insertRates"/>
+            <log idref="clockRate"/>
+            <log idref="birthRate"/>
+            <log idref="deathRate"/>
+            <log idref="missRate"/>
+            <log idref="missProb"/>
+            <log idref="samplingProportion"/>
+        </logger>
+
+        <logger id="screenlog" spec="Logger" logEvery="100000">
+            <log idref="posterior"/>
+            <log id="ESS.0" spec="util.ESS" arg="@posterior"/>
+            <log idref="likelihood"/>
+            <log idref="prior"/>
+        </logger>
+
+        <logger id="treelog.t:alignment" spec="Logger" fileName="log/infer_subsampled_simulated_$(analysis)_$(ntargets).seed=$(seed).trees" logEvery="1000" mode="tree">
+            <log idref="SciPhyTree" printMetaData="true"/>
+        </logger>
+
+
+
+    </run>
+
+</beast>

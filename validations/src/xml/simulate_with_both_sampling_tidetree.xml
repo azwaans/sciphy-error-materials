@@ -1,0 +1,123 @@
+<beast version="2.0"
+       namespace="beast.pkgmgmt:beast.base.core:beast.base.inference
+                 :beast.core.util
+                 :beast.core.parameter
+                 :beast.evolution.alignment
+                 :beast.evolution.likelihood
+                 :beast.evolution.tree
+                 :beast.evolution.tree.coalescent
+                 :beast.evolution.sitemodel
+                 :beast.evolution.substitutionmodel
+                 :beast.evolution.operators
+                 :beast.math.distributions
+                 :feast.simulation
+                 :sciphy.evolution
+                 :bdmmprime.distribution
+                 :bdmmprime.parameterization
+                 :bdmmprime.mapping">
+
+
+    <!-- scarring rates -->
+    <parameter id="scarringRate"
+               spec="feast.fileio.RealParameterFromXSV"
+               name="stateNode"
+               fileName="parameters/simParams_$(seed).csv"
+               sep="," startRow="1" rowCount="1"
+               startCol="0" colCount="13" />
+
+    <!-- clock rate -->
+    <parameter id="clockRate"
+               spec="feast.fileio.RealParameterFromXSV"
+               name="stateNode"
+               fileName="parameters/simParams_$(seed).csv"
+               sep="," startRow="1" rowCount="1"
+               startCol="13" colCount="1" />
+
+    <!-- missing tip prob -->
+    <parameter id="dropoutProb"
+               spec="feast.fileio.RealParameterFromXSV"
+               name="stateNode"
+               fileName="parameters/simParams_$(seed).csv"
+               sep="," startRow="1" rowCount="1"
+               startCol="14" colCount="1" />
+
+    <!-- silencing rate -->
+    <parameter id="lossRate"
+               spec="feast.fileio.RealParameterFromXSV"
+               name="stateNode"
+               fileName="parameters/simParams_$(seed).csv"
+               sep="," startRow="1" rowCount="1"
+               startCol="15" colCount="1" />
+
+
+
+    <!-- length of simulation -->
+    <origin id="origin" spec="beast.base.inference.parameter.RealParameter" value="25"/>
+
+  <run spec="GPSimulator" nSims="1">
+
+    <!-- simulate sequence -->
+
+       <!-- simulate tree -->
+        <simulationObject spec="bdmmprime.trajectories.simulation.SimulatedTree"
+                          id="simulatedTree" treeFileName="data/$(filebase).$(seed).newick"
+                          minSamples="1" simulateUntypedTree="True">
+
+            <parameterization spec="CanonicalParameterization">
+                <processLength idref="origin" />
+                <typeSet id="typeSet" spec="bdmmprime.parameterization.TypeSet" value="0"/>
+
+                <!-- Fix phylodynamic parameters -->
+                <birthRate spec="SkylineVectorParameter" typeSet="@typeSet">
+                    <skylineValues id="birthRate_ins" spec="beast.base.inference.parameter.RealParameter" value="0.8" />
+                </birthRate>
+
+                <deathRate spec="SkylineVectorParameter" typeSet="@typeSet">
+                    <skylineValues id="deathRate_ins" spec="beast.base.inference.parameter.RealParameter" value="0.2" />
+                </deathRate>
+
+                <!-- no sampling through time, only at present -->
+                <samplingRate spec="SkylineVectorParameter" typeSet="@typeSet">
+                    <skylineValues spec="beast.base.inference.parameter.RealParameter" value="0.0"/>
+                </samplingRate>
+
+                <rhoSampling spec="TimedParameter" typeSet="@typeSet"
+                             times="25" timesAreAges="False" values="0.00003"/>
+
+                <removalProb spec="SkylineVectorParameter" typeSet="@typeSet">
+                    <skylineValues spec="beast.base.inference.parameter.RealParameter" value="1.0"/>
+                </removalProb>
+
+            </parameterization>
+
+            <finalSampleOffset id="finalSampleOffset" spec="beast.base.inference.parameter.RealParameter" value="0"/> <!-- Will be set by simulation -->
+            <!--replace frequencies with startTypePriorProbs in newer  versions -->
+            <frequencies spec="beast.base.inference.parameter.RealParameter" value="1.0"/>
+        </simulationObject>
+
+      <!-- read-in tree (this is done because it looks like the tree is changed when written, ensure that we simulate and infer on same tree) -->
+      <simulationObject id="simulatedTreeNewick"
+                 spec="feast.fileio.TreeFromNewickFile"
+                 IsLabelledNewick='true' adjustTipHeights='false'
+                 fileName="data/$(filebase).$(seed).newick"
+       />
+
+    <simulationObject id="seqAlign" spec="tidetree.simulation.SimulatedAlignment"
+                      outputFileName="data/$(filebase).seed=$(seed).alignment.tidetree"
+                      sequenceLength="20" tree="@simulatedTreeNewick" origin="@origin">
+        <userDataType spec="tidetree.evolution.datatype.EditData" nrOfStates="15"/>
+
+        <siteModel spec="beast.base.evolution.sitemodel.SiteModel">
+            <mutationRate idref="clockRate"/>
+            <substModel id="scarringModel" spec="tidetree.substitutionmodel.EditAndSilencingModel" editRates="@scarringRate" silencingRate="@lossRate" missingProbability="@dropoutProb"
+                        editHeight="25" editDuration="25" >
+                <frequencies id="freq" spec="beast.base.evolution.substitutionmodel.Frequencies" frequencies="1.0 0 0" estimate="false"/>
+            </substModel>
+        </siteModel>
+        <branchRateModel id="StrictClock.c:h3n2_2deme" spec="beast.base.evolution.branchratemodel.StrictClockModel" clock.rate="1.0"/>
+    </simulationObject>
+
+
+
+</run>
+</beast>
